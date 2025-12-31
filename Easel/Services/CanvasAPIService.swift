@@ -67,7 +67,7 @@ class CanvasAPIService {
     }
     
     func getCurrentUser() async throws -> CanvasUser {
-        guard var request = makeRequest(path: "users/self") else {
+        guard let request = makeRequest(path: "users/self") else {
             throw APIError.invalidURL
         }
         
@@ -86,7 +86,7 @@ class CanvasAPIService {
     }
     
     func getCourses() async throws -> [CanvasCourse] {
-        guard var request = makeRequest(
+        guard let request = makeRequest(
             path: "courses",
             queryItems: [
                 URLQueryItem(name: "enrollment_type", value: "student"),
@@ -147,7 +147,7 @@ class CanvasAPIService {
     }
     
     func getCourse(courseId: String) async throws -> CanvasCourse {
-        guard var request = makeRequest(
+        guard let request = makeRequest(
             path: "courses/\(courseId)",
             queryItems: [
                 URLQueryItem(name: "include[]", value: "syllabus_body")
@@ -171,7 +171,7 @@ class CanvasAPIService {
     }
     
     func getCourseUsers(courseId: String) async throws -> [CanvasEnrollment] {
-        guard var request = makeRequest(
+        guard let request = makeRequest(
             path: "courses/\(courseId)/enrollments",
             queryItems: [
                 URLQueryItem(name: "include[]", value: "user"),
@@ -221,7 +221,7 @@ class CanvasAPIService {
     }
     
     func getModules(courseId: String) async throws -> [CanvasModule] {
-        guard var request = makeRequest(
+        guard let request = makeRequest(
             path: "courses/\(courseId)/modules",
             queryItems: [
                 URLQueryItem(name: "include[]", value: "items"),
@@ -254,7 +254,7 @@ class CanvasAPIService {
     }
     
     private func getModuleItems(courseId: String, moduleId: String) async throws -> [CanvasModuleItem] {
-        guard var request = makeRequest(
+        guard let request = makeRequest(
             path: "courses/\(courseId)/modules/\(moduleId)/items",
             queryItems: [
                 URLQueryItem(name: "include[]", value: "content_details"),
@@ -285,7 +285,7 @@ class CanvasAPIService {
         let dateFormatter = ISO8601DateFormatter()
         dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         
-        guard var eventsRequest = makeRequest(
+        guard let eventsRequest = makeRequest(
             path: "calendar_events",
             queryItems: [
                 URLQueryItem(name: "type", value: "event"),
@@ -295,7 +295,7 @@ class CanvasAPIService {
                 URLQueryItem(name: "per_page", value: "100")
             ]
         ),
-        var plannablesRequest = makeRequest(
+        let plannablesRequest = makeRequest(
             path: "users/self/planner/items",
             queryItems: [
                 URLQueryItem(name: "filter[course_id]", value: String(courseId)),
@@ -305,11 +305,11 @@ class CanvasAPIService {
             throw APIError.invalidURL
         }
         
-        async let (eventsData, eventsResponse) = Self.urlSession.data(for: eventsRequest)
-        async let (plannablesData, plannablesResponse) = Self.urlSession.data(for: plannablesRequest)
+        async let eventsTask = Self.urlSession.data(for: eventsRequest)
+        async let plannablesTask = Self.urlSession.data(for: plannablesRequest)
         
-        let (eventsDataResult, plannablesDataResult) = try await (eventsData, plannablesData)
-        let (eventsResponseResult, plannablesResponseResult) = await (eventsResponse, plannablesResponse)
+        let (eventsDataResult, eventsResponseResult) = try await eventsTask
+        let (plannablesDataResult, plannablesResponseResult) = try await plannablesTask
         
         guard let eventsHttpResponse = eventsResponseResult as? HTTPURLResponse,
               let plannablesHttpResponse = plannablesResponseResult as? HTTPURLResponse else {
@@ -327,7 +327,7 @@ class CanvasAPIService {
     }
     
     func getPage(courseId: String, pageURL: String) async throws -> CanvasPage {
-        guard var request = makeRequest(path: "courses/\(courseId)/pages/\(pageURL.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? pageURL)") else {
+        guard let request = makeRequest(path: "courses/\(courseId)/pages/\(pageURL.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? pageURL)") else {
             throw APIError.invalidURL
         }
         
@@ -345,7 +345,7 @@ class CanvasAPIService {
     }
     
     func getFrontPage(courseId: String) async throws -> CanvasPage {
-        guard var request = makeRequest(path: "courses/\(courseId)/front_page") else {
+        guard let request = makeRequest(path: "courses/\(courseId)/front_page") else {
             throw APIError.invalidURL
         }
         
@@ -364,7 +364,7 @@ class CanvasAPIService {
     }
     
     func getAnnouncements(courseId: String) async throws -> [CanvasDiscussionTopic] {
-        guard var request = makeRequest(
+        guard let request = makeRequest(
             path: "courses/\(courseId)/discussion_topics",
             queryItems: [
                 URLQueryItem(name: "only_announcements", value: "1"),
@@ -388,7 +388,7 @@ class CanvasAPIService {
     }
     
     func getAssignments(courseId: String) async throws -> [CanvasAssignment] {
-        guard var request = makeRequest(
+        guard let request = makeRequest(
             path: "courses/\(courseId)/assignments",
             queryItems: [
                 URLQueryItem(name: "include[]", value: "submission"),
@@ -413,7 +413,7 @@ class CanvasAPIService {
     }
     
     func getDiscussions(courseId: String) async throws -> [CanvasDiscussionTopic] {
-        guard var request = makeRequest(
+        guard let request = makeRequest(
             path: "courses/\(courseId)/discussion_topics",
             queryItems: [
                 URLQueryItem(name: "per_page", value: "100")
@@ -465,7 +465,7 @@ class CanvasAPIService {
     }
     
     func getAssignment(courseId: String, assignmentId: String) async throws -> CanvasAssignment {
-        guard var request = makeRequest(
+        guard let request = makeRequest(
             path: "courses/\(courseId)/assignments/\(assignmentId)",
             queryItems: [
                 URLQueryItem(name: "include[]", value: "submission")
@@ -488,7 +488,7 @@ class CanvasAPIService {
     }
     
     func getGrades(courseId: String) async throws -> [CanvasAssignment] {
-        guard var request = makeRequest(
+        guard let request = makeRequest(
             path: "courses/\(courseId)/assignments",
             queryItems: [
                 URLQueryItem(name: "include[]", value: "submission"),
@@ -516,7 +516,7 @@ class CanvasAPIService {
     }
     
     func getDiscussionTopic(courseId: String, topicId: String) async throws -> CanvasDiscussionTopic {
-        guard var request = makeRequest(
+        guard let request = makeRequest(
             path: "courses/\(courseId)/discussion_topics/\(topicId)",
             queryItems: []
         ) else {
@@ -587,7 +587,7 @@ class CanvasAPIService {
     }
     
     func getFile(courseId: String, fileId: String) async throws -> CanvasFile {
-        guard var request = makeRequest(path: "courses/\(courseId)/files/\(fileId)") else {
+        guard let request = makeRequest(path: "courses/\(courseId)/files/\(fileId)") else {
             throw APIError.invalidURL
         }
         
