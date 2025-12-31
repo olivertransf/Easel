@@ -12,7 +12,8 @@ struct HomeView: View {
     let session: LoginSession
     @State private var courses: [CanvasCourse] = []
     @State private var isLoadingCourses = false
-    @State private var showStarredOnly = false
+    @AppStorage("showStarredOnly") private var showStarredOnly = false
+    @State private var selectedCourse: CanvasCourse?
     
     var filteredCourses: [CanvasCourse] {
         if showStarredOnly {
@@ -24,29 +25,37 @@ struct HomeView: View {
     var body: some View {
         TabView {
             NavigationStack {
-                ScrollView {
-                    VStack(spacing: 24) {
-                        coursesSection()
-                    }
-                    .padding()
-                }
-                .navigationTitle("Courses")
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(action: {
-                            Task {
-                                await loadCourses()
+                Group {
+                    if let selectedCourse = selectedCourse {
+                        CourseDetailView(course: selectedCourse, loginService: loginService, session: session, onBack: {
+                            self.selectedCourse = nil
+                        })
+                    } else {
+                        ScrollView {
+                            VStack(spacing: 24) {
+                                coursesSection()
                             }
-                        }) {
-                            Image(systemName: "arrow.clockwise")
+                            .padding()
+                        }
+                        .navigationTitle("Courses")
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Button(action: {
+                                    Task {
+                                        await loadCourses()
+                                    }
+                                }) {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                            }
+                        }
+                        .task {
+                            await loadCourses()
+                        }
+                        .refreshable {
+                            await loadCourses()
                         }
                     }
-                }
-                .task {
-                    await loadCourses()
-                }
-                .refreshable {
-                    await loadCourses()
                 }
             }
             .tabItem {
@@ -93,7 +102,9 @@ struct HomeView: View {
             } else {
                 VStack(spacing: 8) {
                     ForEach(filteredCourses) { course in
-                        NavigationLink(destination: CourseDetailView(course: course, loginService: loginService, session: session)) {
+                        Button {
+                            selectedCourse = course
+                        } label: {
                             CourseRow(course: course)
                         }
                         .buttonStyle(.plain)

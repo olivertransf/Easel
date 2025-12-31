@@ -46,6 +46,32 @@ struct CanvasCourse: Codable, Identifiable {
         case defaultView = "default_view"
     }
     
+    init(
+        id: String,
+        name: String? = nil,
+        courseCode: String? = nil,
+        startAt: String? = nil,
+        endAt: String? = nil,
+        enrollmentTermId: String? = nil,
+        totalStudents: Int? = nil,
+        workflowState: String? = nil,
+        isFavorite: Bool? = nil,
+        syllabusBody: String? = nil,
+        defaultView: CourseDefaultView? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.courseCode = courseCode
+        self.startAt = startAt
+        self.endAt = endAt
+        self.enrollmentTermId = enrollmentTermId
+        self.totalStudents = totalStudents
+        self.workflowState = workflowState
+        self.isFavorite = isFavorite
+        self.syllabusBody = syllabusBody
+        self.defaultView = defaultView
+    }
+    
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         

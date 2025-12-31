@@ -17,8 +17,6 @@ class AuthPresentationContextProvider: NSObject, ASWebAuthenticationPresentation
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         #if canImport(UIKit)
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else {
-            // This should rarely happen - if no window scene exists, create a basic window
-            // Use deprecated API only as last resort fallback
             return UIWindow()
         }
         

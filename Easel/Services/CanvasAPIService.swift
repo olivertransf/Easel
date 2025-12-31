@@ -430,7 +430,10 @@ class CanvasAPIService {
         
         guard httpResponse.statusCode == 200 else {
             if let errorData = String(data: data, encoding: .utf8) {
-                print("Discussions API Error Response: \(errorData)")
+                print("Discussions API Error Response (Status \(httpResponse.statusCode)): \(errorData.prefix(500))")
+            }
+            if httpResponse.statusCode == 403 || httpResponse.statusCode == 404 {
+                return []
             }
             throw APIError.httpError(httpResponse.statusCode)
         }
@@ -523,6 +526,8 @@ class CanvasAPIService {
             throw APIError.invalidURL
         }
         
+        print("Requesting discussion: \(request.url?.absoluteString ?? "invalid URL")")
+        
         let (data, response) = try await Self.urlSession.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -530,10 +535,37 @@ class CanvasAPIService {
         }
         
         guard httpResponse.statusCode == 200 else {
+            if let errorData = String(data: data, encoding: .utf8) {
+                print("Discussion API Error Response (Status \(httpResponse.statusCode)): \(errorData.prefix(500))")
+            }
+            
+            if httpResponse.statusCode == 404 {
+                print("404 error - trying to find discussion in list...")
+                do {
+                    let allDiscussions = try await getDiscussions(courseId: courseId)
+                    if let foundDiscussion = allDiscussions.first(where: { $0.id == topicId }) {
+                        print("Found discussion in list, fetching full details...")
+                        return foundDiscussion
+                    } else {
+                        print("Discussion ID \(topicId) not found in course \(courseId) discussions list")
+                        print("Available discussion IDs: \(allDiscussions.map { $0.id }.joined(separator: ", "))")
+                    }
+                } catch {
+                    print("Failed to fetch discussions list: \(error)")
+                }
+            }
+            
             throw APIError.httpError(httpResponse.statusCode)
         }
         
-        return try JSONDecoder().decode(CanvasDiscussionTopic.self, from: data)
+        do {
+            return try JSONDecoder().decode(CanvasDiscussionTopic.self, from: data)
+        } catch {
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("Failed to decode discussion. Response: \(jsonString.prefix(1000))")
+            }
+            throw error
+        }
     }
     
     struct WebSessionResponse: Codable {

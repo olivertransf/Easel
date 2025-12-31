@@ -12,7 +12,9 @@ struct CourseDetailView: View {
     let course: CanvasCourse
     @ObservedObject var loginService: LoginService
     let session: LoginSession
+    let onBack: () -> Void
     @State private var selectedTab: CourseTab = .home
+    @State private var navigationPath = NavigationPath()
     
     enum CourseTab: String, CaseIterable {
         case home = "Home"
@@ -37,41 +39,79 @@ struct CourseDetailView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("Course Tab", selection: $selectedTab) {
-                ForEach(CourseTab.allCases, id: \.self) { tab in
-                    Label(tab.rawValue, systemImage: tab.icon)
-                        .tag(tab)
+        NavigationStack(path: $navigationPath) {
+            VStack(spacing: 0) {
+                Picker("Course Tab", selection: $selectedTab) {
+                    ForEach(CourseTab.allCases, id: \.self) { tab in
+                        Label(tab.rawValue, systemImage: tab.icon)
+                            .tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding()
+                
+                switch selectedTab {
+                case .home:
+                    CourseHomeView(course: course, session: session, navigationPath: $navigationPath)
+                case .announcements:
+                    CourseAnnouncementsView(course: course, session: session)
+                case .assignments:
+                    CourseAssignmentsView(course: course, session: session)
+                case .discussions:
+                    CourseDiscussionsView(course: course, session: session)
+                case .modules:
+                    CourseModulesView(course: course, session: session)
+                case .grades:
+                    CourseGradesView(course: course, session: session)
+                case .people:
+                    CoursePeopleView(course: course, session: session)
                 }
             }
-            .pickerStyle(.segmented)
-            .padding()
-            
-                    switch selectedTab {
-                    case .home:
-                CourseHomeView(course: course, session: session)
-            case .announcements:
-                CourseAnnouncementsView(course: course, session: session)
-                    case .assignments:
-                CourseAssignmentsView(course: course, session: session)
-                    case .discussions:
-                CourseDiscussionsView(course: course, session: session)
-            case .modules:
-                CourseModulesView(course: course, session: session)
-                    case .grades:
-                CourseGradesView(course: course, session: session)
-            case .people:
-                CoursePeopleView(course: course, session: session)
+            .navigationTitle(course.displayName)
+            .navigationBarTitleDisplayMode(.large)
+            .navigationDestination(for: HomeNavigationDestination.self) { destination in
+                destinationView(for: destination, navigationPath: $navigationPath)
+            }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if navigationPath.isEmpty {
+                        Button {
+                            onBack()
+                        } label: {
+                            HStack {
+                                Image(systemName: "chevron.left")
+                                Text("Courses")
+                            }
+                        }
+                    }
+                }
             }
         }
-        .navigationTitle(course.displayName)
-        .navigationBarTitleDisplayMode(.large)
+    }
+    
+    @ViewBuilder
+    private func destinationView(for destination: HomeNavigationDestination, navigationPath: Binding<NavigationPath>) -> some View {
+        switch destination {
+        case .assignment(let assignmentId, let courseId):
+            ModuleItemAssignmentView(assignmentId: assignmentId, courseId: courseId, session: session)
+        case .discussion(let discussionId, let courseId):
+            DiscussionDetailViewWrapper(discussionId: discussionId, courseId: courseId, session: session)
+        case .page(let pageUrl, let courseId):
+            ModuleItemPageViewWrapper(pageUrl: pageUrl, courseId: courseId, session: session, navigationPath: navigationPath)
+        case .module(_, let courseId):
+            CourseModulesView(course: CanvasCourse(id: courseId), session: session)
+                .navigationTitle("Modules")
+                .navigationBarTitleDisplayMode(.inline)
+        case .file(let fileId, let courseId):
+            ModuleItemFileView(fileId: fileId, courseId: courseId, baseURL: session.baseURL, session: session, title: "")
+        }
     }
 }
 
 struct CourseHomeView: View {
     let course: CanvasCourse
     let session: LoginSession
+    @Binding var navigationPath: NavigationPath
     @State private var courseDetails: CanvasCourse?
     @State private var frontPage: CanvasPage?
     @State private var isLoading = false
@@ -80,49 +120,67 @@ struct CourseHomeView: View {
     var body: some View {
         GeometryReader { geometry in
             ScrollView {
-            if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding()
-            } else if let errorMessage = errorMessage {
-                VStack {
-                    Text(errorMessage)
-                        .foregroundColor(.red)
+                if isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
                         .padding()
-                    Button("Retry") {
-                        Task {
-                            await loadHomePage()
+                } else if let errorMessage = errorMessage {
+                    VStack {
+                        Text(errorMessage)
+                            .foregroundColor(.red)
+                            .padding()
+                        Button("Retry") {
+                            Task {
+                                await loadHomePage()
+                            }
                         }
                     }
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-            } else if let defaultView = courseDetails?.defaultView {
-                switch defaultView {
-                case .wiki:
-                    if let page = frontPage, let body = page.body, !body.isEmpty {
-                        IncrementalImageWebView(htmlString: body, baseURL: session.baseURL, session: session)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                } else if let defaultView = courseDetails?.defaultView {
+                    switch defaultView {
+                    case .wiki:
+                        if let page = frontPage, let body = page.body, !body.isEmpty {
+                            IncrementalImageWebView(
+                                htmlString: body,
+                                baseURL: session.baseURL,
+                                session: session,
+                                courseId: course.id,
+                                navigationPath: $navigationPath
+                            )
                             .frame(maxWidth: .infinity)
                             .frame(minHeight: geometry.size.height)
-                } else {
+                        } else {
+                            VStack {
+                                Text("Welcome to \(course.displayName)")
+                                    .font(.title2)
+                                    .fontWeight(.semibold)
+                                    .padding()
+                                Text("Course content will appear here")
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                        }
+                    case .modules:
+                        CourseModulesView(course: course, session: session)
+                    case .assignments:
+                        CourseAssignmentsView(course: course, session: session)
+                    case .syllabus:
+                        CourseSyllabusView(course: course, session: session)
+                    case .feed:
                         VStack {
-                    Text("Welcome to \(course.displayName)")
-                        .font(.title2)
-                        .fontWeight(.semibold)
+                            Text("Welcome to \(course.displayName)")
+                                .font(.title2)
+                                .fontWeight(.semibold)
                                 .padding()
-                    Text("Course content will appear here")
-                        .foregroundColor(.secondary)
-                }
+                            Text("Course content will appear here")
+                                .foregroundColor(.secondary)
+                        }
                         .frame(maxWidth: .infinity)
                         .padding()
                     }
-                case .modules:
-                    CourseModulesView(course: course, session: session)
-                case .assignments:
-                    CourseAssignmentsView(course: course, session: session)
-                case .syllabus:
-                    CourseSyllabusView(course: course, session: session)
-                case .feed:
+                } else {
                     VStack {
                         Text("Welcome to \(course.displayName)")
                             .font(.title2)
@@ -134,18 +192,6 @@ struct CourseHomeView: View {
                     .frame(maxWidth: .infinity)
                     .padding()
                 }
-            } else {
-                VStack {
-                    Text("Welcome to \(course.displayName)")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .padding()
-                    Text("Course content will appear here")
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-            }
             }
         }
         .refreshable {
@@ -174,9 +220,184 @@ struct CourseHomeView: View {
         
         isLoading = false
     }
-    
-    
 }
+
+struct DiscussionDetailViewWrapper: View {
+    let discussionId: String
+    let courseId: String
+    let session: LoginSession
+    @State private var discussion: CanvasDiscussionTopic?
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+    
+    var body: some View {
+        Group {
+            if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let errorMessage = errorMessage {
+                VStack {
+                    Text(errorMessage)
+                        .foregroundColor(.red)
+                    Button("Retry") {
+                        Task {
+                            await loadDiscussion()
+                        }
+                    }
+                }
+                .padding()
+            } else if let discussion = discussion {
+                DiscussionDetailView(discussion: discussion, courseId: courseId, session: session)
+            } else {
+                Text("Discussion not found")
+                    .foregroundColor(.secondary)
+                    .padding()
+            }
+        }
+        .task {
+            await loadDiscussion()
+        }
+    }
+    
+    private func loadDiscussion() async {
+        isLoading = true
+        errorMessage = nil
+        
+        let cleanedDiscussionId = discussionId.trimmingCharacters(in: .whitespacesAndNewlines)
+        print("Loading discussion with ID: '\(cleanedDiscussionId)' for course: \(courseId)")
+        
+        guard !cleanedDiscussionId.isEmpty else {
+            errorMessage = "Invalid discussion ID"
+            isLoading = false
+            return
+        }
+        
+        do {
+            let apiService = CanvasAPIService(session: session)
+            print("Attempting to load discussion ID '\(cleanedDiscussionId)' from course '\(courseId)'")
+            discussion = try await apiService.getDiscussionTopic(courseId: courseId, topicId: cleanedDiscussionId)
+            print("Successfully loaded discussion: \(discussion?.title ?? "Unknown")")
+        } catch let error as APIError {
+            print("API Error loading discussion: \(error)")
+            if case .httpError(let code) = error {
+                switch code {
+                case 404:
+                    print("404 error - attempting fallback: searching discussions list...")
+                    do {
+                        let apiService = CanvasAPIService(session: session)
+                        let allDiscussions = try await apiService.getDiscussions(courseId: courseId)
+                        print("Found \(allDiscussions.count) discussions in course")
+                        print("Looking for discussion with ID: \(cleanedDiscussionId)")
+                        print("Available IDs: \(allDiscussions.map { $0.id }.prefix(10).joined(separator: ", "))")
+                        
+                        if let found = allDiscussions.first(where: { $0.id == cleanedDiscussionId }) {
+                            print("Found discussion in list: \(found.title ?? "Untitled")")
+                            discussion = found
+                            return
+                        } else {
+                            errorMessage = "Discussion not found. The discussion may have been deleted, moved, or you may not have access. Discussion ID: \(cleanedDiscussionId)"
+                        }
+                    } catch {
+                        print("Fallback search failed: \(error)")
+                        errorMessage = "Discussion not found (ID: \(cleanedDiscussionId)). It may have been deleted or you may not have access."
+                    }
+                case 403:
+                    errorMessage = "You don't have permission to view this discussion."
+                case 401:
+                    errorMessage = "Please log in again to view this discussion."
+                default:
+                    errorMessage = error.localizedDescription
+                }
+            } else {
+                errorMessage = error.localizedDescription
+            }
+        } catch let decodingError as DecodingError {
+            print("Decoding error: \(decodingError)")
+            errorMessage = "Failed to parse discussion data. The discussion format may be unsupported."
+        } catch {
+            print("Error loading discussion: \(error)")
+            errorMessage = "Failed to load discussion: \(error.localizedDescription)"
+        }
+        
+        isLoading = false
+    }
+}
+
+struct ModuleItemPageViewWrapper: View {
+    let pageUrl: String
+    let courseId: String
+    let session: LoginSession
+    @Binding var navigationPath: NavigationPath
+    @State private var page: CanvasPage?
+    @State private var isLoading = true
+    @State private var innerNavigationPath = NavigationPath()
+    
+    var body: some View {
+        NavigationStack(path: $innerNavigationPath) {
+            Group {
+                if isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let page = page, let body = page.body, !body.isEmpty {
+                    ScrollView {
+                        IncrementalImageWebView(
+                            htmlString: body,
+                            baseURL: session.baseURL,
+                            session: session,
+                            courseId: courseId,
+                            navigationPath: $innerNavigationPath
+                        )
+                        .frame(minHeight: 400)
+                    }
+                } else {
+                    Text("Unable to load page")
+                        .foregroundColor(.secondary)
+                        .padding()
+                }
+            }
+            .navigationDestination(for: HomeNavigationDestination.self) { destination in
+                destinationView(for: destination, parentNavigationPath: $navigationPath)
+            }
+        }
+        .task {
+            await loadPage()
+        }
+    }
+    
+    @ViewBuilder
+    private func destinationView(for destination: HomeNavigationDestination, parentNavigationPath: Binding<NavigationPath>) -> some View {
+        switch destination {
+        case .assignment(let assignmentId, let destCourseId):
+            ModuleItemAssignmentView(assignmentId: assignmentId, courseId: destCourseId, session: session)
+        case .discussion(let discussionId, let destCourseId):
+            DiscussionDetailViewWrapper(discussionId: discussionId, courseId: destCourseId, session: session)
+        case .page(let pageUrl, let destCourseId):
+            ModuleItemPageViewWrapper(pageUrl: pageUrl, courseId: destCourseId, session: session, navigationPath: parentNavigationPath)
+        case .module(_, let destCourseId):
+            CourseModulesView(course: CanvasCourse(id: destCourseId), session: session)
+                .navigationTitle("Modules")
+                .navigationBarTitleDisplayMode(.inline)
+        case .file(let fileId, let destCourseId):
+            ModuleItemFileView(fileId: fileId, courseId: destCourseId, baseURL: session.baseURL, session: session, title: "")
+        }
+    }
+    
+    private func loadPage() async {
+        isLoading = true
+        do {
+            let apiService = CanvasAPIService(session: session)
+            if pageUrl == "front_page" {
+                page = try await apiService.getFrontPage(courseId: courseId)
+            } else {
+                page = try await apiService.getPage(courseId: courseId, pageURL: pageUrl)
+            }
+        } catch {
+            print("Failed to load page: \(error)")
+        }
+        isLoading = false
+    }
+}
+
 
 struct CourseModulesView: View {
     let course: CanvasCourse
@@ -725,6 +946,12 @@ struct CourseDiscussionsView: View {
         do {
             let apiService = CanvasAPIService(session: session)
             discussions = try await apiService.getDiscussions(courseId: course.id)
+        } catch let error as APIError {
+            if case .httpError(let code) = error, code == 403 || code == 404 {
+                errorMessage = "Discussions are not available for this course."
+            } else {
+                errorMessage = error.localizedDescription
+            }
         } catch {
             errorMessage = "Failed to load discussions: \(error.localizedDescription)"
         }
@@ -1415,15 +1642,132 @@ struct WebView: UIViewRepresentable {
     }
 }
 
+enum HomeNavigationDestination: Hashable {
+    case assignment(String, courseId: String)
+    case discussion(String, courseId: String)
+    case page(String, courseId: String)
+    case module(String, courseId: String)
+    case file(String, courseId: String)
+}
+
+struct CanvasURLParser {
+    let baseURL: URL
+    let courseId: String
+    
+    func parse(url: URL) -> HomeNavigationDestination? {
+        guard url.host == baseURL.host || url.host == nil else {
+            return nil
+        }
+        
+        var urlToParse = url
+        if url.host == nil {
+            if let absoluteURL = URL(string: url.absoluteString, relativeTo: baseURL) {
+                urlToParse = absoluteURL
+            } else if url.path.hasPrefix("/") {
+                urlToParse = baseURL.appendingPathComponent(url.path)
+                if let query = url.query {
+                    var components = URLComponents(url: urlToParse, resolvingAgainstBaseURL: false)
+                    components?.query = query
+                    if let newURL = components?.url {
+                        urlToParse = newURL
+                    }
+                }
+            }
+        }
+        
+        let pathComponents = urlToParse.pathComponents.filter { $0 != "/" && !$0.isEmpty }
+        
+        print("Parsing URL: \(urlToParse.absoluteString)")
+        print("Path components: \(pathComponents)")
+        if let query = urlToParse.query {
+            print("Query parameters: \(query)")
+        }
+        
+        guard let coursesIndex = pathComponents.firstIndex(of: "courses"),
+              coursesIndex + 1 < pathComponents.count else {
+            print("No courses found in path")
+            return nil
+        }
+        
+        let urlCourseId = pathComponents[coursesIndex + 1]
+        if urlCourseId != courseId {
+            print("Course ID mismatch: expected \(courseId), got \(urlCourseId) - will try anyway")
+        }
+        
+        var index = coursesIndex + 2
+        
+        while index < pathComponents.count {
+            let component = pathComponents[index]
+            
+            switch component {
+            case "assignments":
+                if index + 1 < pathComponents.count {
+                    let assignmentId = pathComponents[index + 1]
+                    if assignmentId != "syllabus" {
+                        print("Found assignment: \(assignmentId) in course: \(urlCourseId)")
+                        return .assignment(assignmentId, courseId: urlCourseId)
+                    }
+                }
+            case "discussion_topics":
+                if index + 1 < pathComponents.count {
+                    var discussionId = pathComponents[index + 1]
+                    if let querySeparator = discussionId.firstIndex(of: "?") {
+                        discussionId = String(discussionId[..<querySeparator])
+                    }
+                    if let fragmentSeparator = discussionId.firstIndex(of: "#") {
+                        discussionId = String(discussionId[..<fragmentSeparator])
+                    }
+                    if discussionId != "new" && !discussionId.isEmpty {
+                        print("Found discussion: \(discussionId) in course: \(urlCourseId)")
+                        print("Full URL path: \(urlToParse.path)")
+                        print("Discussion ID after cleaning: '\(discussionId)'")
+                        return .discussion(discussionId, courseId: urlCourseId)
+                    }
+                }
+            case "pages":
+                if index + 1 < pathComponents.count {
+                    let pageUrl = pathComponents[index + 1]
+                    print("Found page: \(pageUrl) in course: \(urlCourseId)")
+                    return .page(pageUrl, courseId: urlCourseId)
+                }
+            case "modules":
+                if index + 1 < pathComponents.count {
+                    let moduleId = pathComponents[index + 1]
+                    print("Found module: \(moduleId) in course: \(urlCourseId)")
+                    return .module(moduleId, courseId: urlCourseId)
+                }
+            case "files":
+                if index + 1 < pathComponents.count {
+                    let fileId = pathComponents[index + 1]
+                    if fileId != "download" && fileId != "preview" {
+                        print("Found file: \(fileId) in course: \(urlCourseId)")
+                        return .file(fileId, courseId: urlCourseId)
+                    }
+                }
+            default:
+                break
+            }
+            
+            index += 1
+        }
+        
+        print("No matching resource found in URL")
+        return nil
+    }
+}
+
 struct IncrementalImageWebView: UIViewRepresentable {
     let htmlString: String
     let baseURL: URL
     let session: LoginSession
+    let courseId: String
+    @Binding var navigationPath: NavigationPath
     
     func makeUIView(context: Context) -> WKWebView {
         let webView = WKWebView()
         webView.navigationDelegate = context.coordinator
         context.coordinator.webView = webView
+        context.coordinator.navigationPath = $navigationPath
         return webView
     }
     
@@ -1461,19 +1805,24 @@ struct IncrementalImageWebView: UIViewRepresentable {
     }
     
     func makeCoordinator() -> IncrementalImageCoordinator {
-        IncrementalImageCoordinator(baseURL: baseURL, session: session)
+        IncrementalImageCoordinator(baseURL: baseURL, session: session, courseId: courseId)
     }
     
     class IncrementalImageCoordinator: NSObject, WKNavigationDelegate {
         let baseURL: URL
         let session: LoginSession
+        let courseId: String
         var lastHTML: String = ""
         var imageMap: [String: URL] = [:]
         weak var webView: WKWebView?
+        var navigationPath: Binding<NavigationPath>?
+        let urlParser: CanvasURLParser
         
-        init(baseURL: URL, session: LoginSession) {
+        init(baseURL: URL, session: LoginSession, courseId: String) {
             self.baseURL = baseURL
             self.session = session
+            self.courseId = courseId
+            self.urlParser = CanvasURLParser(baseURL: baseURL, courseId: courseId)
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -1582,6 +1931,22 @@ struct IncrementalImageWebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             if navigationAction.navigationType == .linkActivated {
                 if let url = navigationAction.request.url {
+                    print("Link clicked: \(url.absoluteString)")
+                    if let destination = urlParser.parse(url: url) {
+                        print("Parsed destination: \(destination)")
+                        decisionHandler(.cancel)
+                        DispatchQueue.main.async {
+                            print("=== APPENDING TO NAVIGATION PATH ===")
+                            print("Navigation path count before append: \(self.navigationPath?.wrappedValue.count ?? -1)")
+                            self.navigationPath?.wrappedValue.append(destination)
+                            print("Navigation path count after append: \(self.navigationPath?.wrappedValue.count ?? -1)")
+                            print("====================================")
+                        }
+                        return
+                    } else {
+                        print("Could not parse URL: \(url.absoluteString)")
+                    }
+                    
                     if url.host == baseURL.host || url.host == nil {
                         decisionHandler(.allow)
                     } else {
@@ -1960,8 +2325,14 @@ struct ModuleItemPageView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let page = page, let body = page.body, !body.isEmpty {
                 ScrollView {
-                    IncrementalImageWebView(htmlString: body, baseURL: session.baseURL, session: session)
-                        .frame(minHeight: 400)
+                    IncrementalImageWebView(
+                        htmlString: body,
+                        baseURL: session.baseURL,
+                        session: session,
+                        courseId: courseId,
+                        navigationPath: .constant(NavigationPath())
+                    )
+                    .frame(minHeight: 400)
                 }
             } else {
                 Text("Unable to load page")

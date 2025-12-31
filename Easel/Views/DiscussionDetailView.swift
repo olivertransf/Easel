@@ -140,6 +140,8 @@ struct DiscussionDetailView: View {
         do {
             let apiService = CanvasAPIService(session: session)
             fullDiscussion = try await apiService.getDiscussionTopic(courseId: courseId, topicId: discussion.id)
+        } catch let error as APIError {
+            errorMessage = error.localizedDescription
         } catch {
             errorMessage = "Failed to load discussion: \(error.localizedDescription)"
         }
