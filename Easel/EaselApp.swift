@@ -12,6 +12,15 @@ struct EaselApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .onOpenURL { url in
+                    if url.scheme == "easel" {
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("OAuthCallback"),
+                            object: nil,
+                            userInfo: ["url": url]
+                        )
+                    }
+                }
         }
     }
 }
