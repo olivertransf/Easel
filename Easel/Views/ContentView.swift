@@ -6,8 +6,10 @@
 //
 
 import SwiftUI
+import Inject
 
 struct ContentView: View {
+    @ObserveInjection var iO
     @StateObject private var loginService = LoginService()
     
     var body: some View {
@@ -18,6 +20,7 @@ struct ContentView: View {
                 LoginStartView(loginService: loginService)
             }
         }
+        .enableInjection()
     }
 }
 

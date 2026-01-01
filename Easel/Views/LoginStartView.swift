@@ -1,6 +1,8 @@
 import SwiftUI
+import Inject
 
 struct LoginStartView: View {
+    @ObserveInjection var iO
     @ObservedObject var loginService: LoginService
     @State private var showFindSchool = false
     
@@ -37,6 +39,7 @@ struct LoginStartView: View {
                 LoginFindSchoolView(loginService: loginService)
             }
         }
+        .enableInjection()
     }
 }
 

@@ -6,8 +6,10 @@
 //
 
 import SwiftUI
+import Inject
 
 struct HomeView: View {
+    @ObserveInjection var iO
     @ObservedObject var loginService: LoginService
     let session: LoginSession
     @State private var courses: [CanvasCourse] = []
@@ -82,6 +84,7 @@ struct HomeView: View {
                     Label("Settings", systemImage: "gearshape.fill")
                 }
         }
+        .enableInjection()
     }
     
     @ViewBuilder
@@ -144,6 +147,7 @@ struct HomeView: View {
 }
 
 struct CourseRow: View {
+    @ObserveInjection var iO
     let course: CanvasCourse
     
     var body: some View {
@@ -204,6 +208,7 @@ struct CourseRow: View {
         .padding()
         .background(Color(.systemGray6))
         .cornerRadius(10)
+        .enableInjection()
     }
 }
 
