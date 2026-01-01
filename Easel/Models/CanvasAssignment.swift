@@ -46,6 +46,7 @@ struct CanvasAssignment: Codable, Identifiable {
     let submissionTypes: [String]
     let published: Bool?
     let submission: Submission?
+    let rubric: [CanvasRubricCriterion]?
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -59,6 +60,7 @@ struct CanvasAssignment: Codable, Identifiable {
         case submissionTypes = "submission_types"
         case published
         case submission
+        case rubric
     }
     
     init(from decoder: Decoder) throws {
@@ -80,6 +82,7 @@ struct CanvasAssignment: Codable, Identifiable {
         published = try container.decodeIfPresent(Bool.self, forKey: .published)
         
         submission = try container.decodeIfPresent(Submission.self, forKey: .submission)
+        rubric = try container.decodeIfPresent([CanvasRubricCriterion].self, forKey: .rubric)
         
         if let dueAtString = try? container.decodeIfPresent(String.self, forKey: .dueAt), let date = ISO8601DateFormatter().date(from: dueAtString) {
             dueAt = date

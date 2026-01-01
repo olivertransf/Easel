@@ -92,7 +92,9 @@ class CanvasAPIService {
                 URLQueryItem(name: "enrollment_type", value: "student"),
                 URLQueryItem(name: "enrollment_state", value: "active"),
                 URLQueryItem(name: "state[]", value: "available"),
-                URLQueryItem(name: "include", value: "favorites"),
+                URLQueryItem(name: "include[]", value: "favorites"),
+                URLQueryItem(name: "include[]", value: "enrollments"),
+                URLQueryItem(name: "include[]", value: "total_scores"),
                 URLQueryItem(name: "per_page", value: "100")
             ]
         ) else {
@@ -121,6 +123,33 @@ class CanvasAPIService {
                     return true
                 }
                 return workflowState == "available" || workflowState == "active"
+            }
+            
+            do {
+                let userEnrollments = try await getUserEnrollments()
+                let enrollmentMap = Dictionary(grouping: userEnrollments) { $0.courseId ?? "" }
+                
+                for index in courses.indices {
+                    let courseId = courses[index].id
+                    if let enrollmentsWithGrades = enrollmentMap[courseId], !enrollmentsWithGrades.isEmpty {
+                        courses[index] = CanvasCourse(
+                            id: courses[index].id,
+                            name: courses[index].name,
+                            courseCode: courses[index].courseCode,
+                            startAt: courses[index].startAt,
+                            endAt: courses[index].endAt,
+                            enrollmentTermId: courses[index].enrollmentTermId,
+                            totalStudents: courses[index].totalStudents,
+                            workflowState: courses[index].workflowState,
+                            isFavorite: courses[index].isFavorite,
+                            syllabusBody: courses[index].syllabusBody,
+                            defaultView: courses[index].defaultView,
+                            enrollments: enrollmentsWithGrades
+                        )
+                    }
+                }
+            } catch {
+                print("Failed to fetch user enrollments for grades: \(error.localizedDescription)")
             }
             
             return courses
@@ -168,6 +197,56 @@ class CanvasAPIService {
         
         let course = try JSONDecoder().decode(CanvasCourse.self, from: data)
         return course
+    }
+    
+    func getUserEnrollments() async throws -> [CanvasEnrollment] {
+        guard let request = makeRequest(
+            path: "users/self/enrollments",
+            queryItems: [
+                URLQueryItem(name: "type[]", value: "StudentEnrollment"),
+                URLQueryItem(name: "state[]", value: "active"),
+                URLQueryItem(name: "per_page", value: "100")
+            ]
+        ) else {
+            throw APIError.invalidURL
+        }
+        
+        let (data, response) = try await Self.urlSession.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            if let errorData = String(data: data, encoding: .utf8) {
+                print("User Enrollments API Error: \(errorData)")
+            }
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+        
+        do {
+            let enrollments = try JSONDecoder().decode([CanvasEnrollment].self, from: data)
+            return enrollments
+        } catch {
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("Failed to decode user enrollments. Response: \(jsonString.prefix(1000))")
+            }
+            if let decodingError = error as? DecodingError {
+                switch decodingError {
+                case .keyNotFound(let key, let context):
+                    print("Missing key '\(key.stringValue)' at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                case .typeMismatch(let type, let context):
+                    print("Type mismatch for type \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                case .valueNotFound(let type, let context):
+                    print("Value not found for type \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                case .dataCorrupted(let context):
+                    print("Data corrupted: \(context.debugDescription)")
+                @unknown default:
+                    print("Unknown decoding error: \(decodingError)")
+                }
+            }
+            throw error
+        }
     }
     
     func getCourseUsers(courseId: String) async throws -> [CanvasEnrollment] {
@@ -471,7 +550,8 @@ class CanvasAPIService {
         guard let request = makeRequest(
             path: "courses/\(courseId)/assignments/\(assignmentId)",
             queryItems: [
-                URLQueryItem(name: "include[]", value: "submission")
+                URLQueryItem(name: "include[]", value: "submission"),
+                URLQueryItem(name: "include[]", value: "rubric")
             ]
         ) else {
             throw APIError.invalidURL
@@ -489,6 +569,44 @@ class CanvasAPIService {
         
         return try JSONDecoder().decode(CanvasAssignment.self, from: data)
     }
+    
+    func getCurrentUserId() async throws -> String {
+        let user = try await getCurrentUser()
+        return user.id
+    }
+    
+    func getSubmission(courseId: String, assignmentId: String, userId: String? = nil) async throws -> CanvasSubmission {
+        let userIdToUse: String
+        if let userId = userId {
+            userIdToUse = userId
+        } else {
+            userIdToUse = try await getCurrentUserId()
+        }
+        
+        guard let request = makeRequest(
+            path: "courses/\(courseId)/assignments/\(assignmentId)/submissions/\(userIdToUse)",
+            queryItems: [
+                URLQueryItem(name: "include[]", value: "submission_comments"),
+                URLQueryItem(name: "include[]", value: "rubric_assessment"),
+                URLQueryItem(name: "include[]", value: "attachments")
+            ]
+        ) else {
+            throw APIError.invalidURL
+        }
+        
+        let (data, response) = try await Self.urlSession.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+        
+        return try JSONDecoder().decode(CanvasSubmission.self, from: data)
+    }
+    
     
     func getGrades(courseId: String) async throws -> [CanvasAssignment] {
         guard let request = makeRequest(
@@ -639,6 +757,57 @@ class CanvasAPIService {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode(CanvasFile.self, from: data)
+    }
+    
+    func getActivities() async throws -> [CanvasActivity] {
+        guard let request = makeRequest(
+            path: "users/self/activity_stream",
+            queryItems: [
+                URLQueryItem(name: "only_active_courses", value: "true"),
+                URLQueryItem(name: "per_page", value: "100")
+            ]
+        ) else {
+            throw APIError.invalidURL
+        }
+        
+        let (data, response) = try await Self.urlSession.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            if let errorData = String(data: data, encoding: .utf8) {
+                print("Activities API Error Response: \(errorData)")
+            }
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+        
+        do {
+            let decoder = JSONDecoder()
+            var activities = try decoder.decode([CanvasActivity].self, from: data)
+            activities.sort { $0.displayDate > $1.displayDate }
+            return activities
+        } catch {
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("Failed to decode activities. Response: \(jsonString.prefix(1000))")
+            }
+            if let decodingError = error as? DecodingError {
+                switch decodingError {
+                case .keyNotFound(let key, let context):
+                    print("Missing key '\(key.stringValue)' at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                case .typeMismatch(let type, let context):
+                    print("Type mismatch for type \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                case .valueNotFound(let type, let context):
+                    print("Value not found for type \(type) at path: \(context.codingPath.map { $0.stringValue }.joined(separator: "."))")
+                case .dataCorrupted(let context):
+                    print("Data corrupted at path: \(context.codingPath.map { $0.stringValue }.joined(separator: ".")) - \(context.debugDescription)")
+                @unknown default:
+                    print("Unknown decoding error: \(decodingError)")
+                }
+            }
+            throw error
+        }
     }
 }
 

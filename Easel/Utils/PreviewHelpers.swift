@@ -10,7 +10,7 @@ import Foundation
 extension CanvasUser {
     static func preview() -> CanvasUser {
         CanvasUser(
-            id: 12345,
+            id: "12345",
             name: "John Doe",
             sortable_name: "Doe, John",
             short_name: "John",

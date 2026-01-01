@@ -8,7 +8,7 @@
 import Foundation
 
 struct CanvasEnrollment: Codable, Identifiable {
-    let id: String
+    let idRaw: String?
     let userId: String?
     let courseId: String?
     let type: String
@@ -16,9 +16,19 @@ struct CanvasEnrollment: Codable, Identifiable {
     let roleId: String?
     let enrollmentState: String?
     let user: CanvasCourseUser?
+    let currentGrade: String?
+    let computedCurrentGrade: String?
+    let computedFinalGrade: String?
+    let computedCurrentScore: Double?
+    let computedFinalScore: Double?
+    let grades: EnrollmentGrades?
+    
+    var id: String {
+        idRaw ?? "\(courseId ?? "unknown")-\(userId ?? "unknown")-\(type)"
+    }
     
     enum CodingKeys: String, CodingKey {
-        case id
+        case idRaw = "id"
         case userId = "user_id"
         case courseId = "course_id"
         case type
@@ -26,15 +36,21 @@ struct CanvasEnrollment: Codable, Identifiable {
         case roleId = "role_id"
         case enrollmentState = "enrollment_state"
         case user
+        case currentGrade = "current_grade"
+        case computedCurrentGrade = "computed_current_grade"
+        case computedFinalGrade = "computed_final_grade"
+        case computedCurrentScore = "computed_current_score"
+        case computedFinalScore = "computed_final_score"
+        case grades
     }
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
-        if let intId = try? container.decode(Int.self, forKey: .id) {
-            id = String(intId)
+        if let intId = try? container.decode(Int.self, forKey: .idRaw) {
+            idRaw = String(intId)
         } else {
-            id = try container.decode(String.self, forKey: .id)
+            idRaw = try container.decodeIfPresent(String.self, forKey: .idRaw)
         }
         
         type = try container.decode(String.self, forKey: .type)
@@ -59,6 +75,39 @@ struct CanvasEnrollment: Codable, Identifiable {
         } else {
             roleId = try container.decodeIfPresent(String.self, forKey: .roleId)
         }
+        
+        currentGrade = try container.decodeIfPresent(String.self, forKey: .currentGrade)
+        computedCurrentGrade = try container.decodeIfPresent(String.self, forKey: .computedCurrentGrade)
+        computedFinalGrade = try container.decodeIfPresent(String.self, forKey: .computedFinalGrade)
+        computedCurrentScore = try container.decodeIfPresent(Double.self, forKey: .computedCurrentScore)
+        computedFinalScore = try container.decodeIfPresent(Double.self, forKey: .computedFinalScore)
+        grades = try container.decodeIfPresent(EnrollmentGrades.self, forKey: .grades)
+    }
+}
+
+struct EnrollmentGrades: Codable {
+    let currentGrade: String?
+    let finalGrade: String?
+    let currentScore: Double?
+    let finalScore: Double?
+    let unpostedCurrentGrade: String?
+    let unpostedFinalGrade: String?
+    let unpostedCurrentScore: Double?
+    let unpostedFinalScore: Double?
+    let htmlUrl: String?
+    let locked: Bool?
+    
+    enum CodingKeys: String, CodingKey {
+        case currentGrade = "current_grade"
+        case finalGrade = "final_grade"
+        case currentScore = "current_score"
+        case finalScore = "final_score"
+        case unpostedCurrentGrade = "unposted_current_grade"
+        case unpostedFinalGrade = "unposted_final_grade"
+        case unpostedCurrentScore = "unposted_current_score"
+        case unpostedFinalScore = "unposted_final_score"
+        case htmlUrl = "html_url"
+        case locked
     }
 }
 

@@ -22,11 +22,8 @@ struct CanvasFile: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
-        if let intId = try? container.decode(Int.self, forKey: .id) {
-            id = String(intId)
-        } else {
-            id = try container.decode(String.self, forKey: .id)
-        }
+        let idValue = try container.decode(AnyCodableValue.self, forKey: .id)
+        id = idValue.stringValue
         
         displayName = try container.decode(String.self, forKey: .displayName)
         filename = try container.decode(String.self, forKey: .filename)

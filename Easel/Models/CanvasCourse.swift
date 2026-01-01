@@ -27,9 +27,34 @@ struct CanvasCourse: Codable, Identifiable {
     let isFavorite: Bool?
     let syllabusBody: String?
     let defaultView: CourseDefaultView?
+    let enrollments: [CanvasEnrollment]?
     
     var displayName: String {
         name ?? courseCode ?? "Untitled Course"
+    }
+    
+    var currentGrade: String? {
+        guard let enrollment = enrollments?.first(where: { $0.type == "StudentEnrollment" || $0.type == "student" }) else {
+            return nil
+        }
+        return enrollment.grades?.currentGrade ?? 
+               enrollment.grades?.finalGrade ??
+               enrollment.computedCurrentGrade ?? 
+               enrollment.currentGrade
+    }
+    
+    var currentScorePercentage: Double? {
+        guard let enrollment = enrollments?.first(where: { $0.type == "StudentEnrollment" || $0.type == "student" }) else {
+            return nil
+        }
+        return enrollment.grades?.currentScore ?? 
+               enrollment.grades?.finalScore ??
+               enrollment.computedCurrentScore ??
+               enrollment.computedFinalScore
+    }
+    
+    var isGradeLocked: Bool {
+        enrollments?.first(where: { $0.type == "StudentEnrollment" || $0.type == "student" })?.grades?.locked ?? false
     }
     
     enum CodingKeys: String, CodingKey {
@@ -44,6 +69,7 @@ struct CanvasCourse: Codable, Identifiable {
         case isFavorite = "is_favorite"
         case syllabusBody = "syllabus_body"
         case defaultView = "default_view"
+        case enrollments
     }
     
     init(
@@ -57,7 +83,8 @@ struct CanvasCourse: Codable, Identifiable {
         workflowState: String? = nil,
         isFavorite: Bool? = nil,
         syllabusBody: String? = nil,
-        defaultView: CourseDefaultView? = nil
+        defaultView: CourseDefaultView? = nil,
+        enrollments: [CanvasEnrollment]? = nil
     ) {
         self.id = id
         self.name = name
@@ -70,6 +97,7 @@ struct CanvasCourse: Codable, Identifiable {
         self.isFavorite = isFavorite
         self.syllabusBody = syllabusBody
         self.defaultView = defaultView
+        self.enrollments = enrollments
     }
     
     init(from decoder: Decoder) throws {
@@ -90,6 +118,7 @@ struct CanvasCourse: Codable, Identifiable {
         isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite)
         syllabusBody = try container.decodeIfPresent(String.self, forKey: .syllabusBody)
         defaultView = try container.decodeIfPresent(CourseDefaultView.self, forKey: .defaultView)
+        enrollments = try container.decodeIfPresent([CanvasEnrollment].self, forKey: .enrollments)
         
         if let intTermId = try? container.decode(Int.self, forKey: .enrollmentTermId) {
             enrollmentTermId = String(intTermId)

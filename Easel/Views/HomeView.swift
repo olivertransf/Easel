@@ -62,6 +62,21 @@ struct HomeView: View {
                 Label("Home", systemImage: "house.fill")
             }
             
+            TodosView(session: session)
+                .tabItem {
+                    Label("Todos", systemImage: "checklist")
+                }
+            
+            CalendarView(session: session)
+                .tabItem {
+                    Label("Calendar", systemImage: "calendar")
+                }
+            
+            NotificationsView(session: session)
+                .tabItem {
+                    Label("Notifications", systemImage: "bell.fill")
+                }
+            
             SettingsView(loginService: loginService, session: session)
                 .tabItem {
                     Label("Settings", systemImage: "gearshape.fill")
@@ -152,6 +167,35 @@ struct CourseRow: View {
             }
             
             Spacer()
+            
+            if let percentage = course.currentScorePercentage {
+                HStack(spacing: 4) {
+                    if course.isGradeLocked {
+                        Image(systemName: "lock.fill")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Text(String(format: "%.2f%%", percentage))
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                }
+            } else if let grade = course.currentGrade {
+                HStack(spacing: 4) {
+                    if course.isGradeLocked {
+                        Image(systemName: "lock.fill")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Text(grade)
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                }
+            } else {
+                Image(systemName: "lock.fill")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
             
             Image(systemName: "chevron.right")
                 .font(.caption)
